@@ -1,0 +1,4 @@
+#!/bin/bash
+#source "$HOME"/kickr/bin/activate
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+"$HOME"/kickr/bin/python3 "$DIR/kickr_gears.py"
