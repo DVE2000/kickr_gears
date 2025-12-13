@@ -1,6 +1,8 @@
 # kickr_gears
 Python Script/Mac App to view KICKR bike gears and grade in a HUD window over Zwift
 
+![KICKR Gears in action](screenshot.jpg)
+
 ## Installation
 
 1. After downloading or cloning, drag the app into the Applications folder
