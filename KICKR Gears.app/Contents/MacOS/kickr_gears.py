@@ -38,6 +38,7 @@ grade_queue = Queue()
 current_lock_status = None
 current_grade = None
 window_scale = 1.0  # Default scale factor
+TITLE_BAR_HEIGHT = 32  # macOS title bar height in pixels
 
 # Config file path in script directory
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -54,8 +55,7 @@ def load_config():
                 y = config.get('window_y', 100)
                 window_scale = config.get('scale', 1.0)
                 # Adjust Y position for title bar height (starts visible)
-                title_bar_height = 32
-                return x, y - title_bar_height, window_scale
+                return x, y - TITLE_BAR_HEIGHT, window_scale
         except Exception as e:
             print(f"Error loading config: {e}")
     return 100, 100, 1.0
@@ -223,7 +223,12 @@ def create_mini_window():
     
     def on_button_release(event):
         """Save window position when drag is complete (button release)."""
-        save_window_position(root.winfo_x(), root.winfo_y())
+        # Adjust for title bar height if title bar is visible
+        x = root.winfo_x()
+        y = root.winfo_y()
+        if title_bar_visible[0]:
+            y += TITLE_BAR_HEIGHT
+        save_window_position(x, y)
 
     def on_closing():
         """Close window and cancel callbacks."""
