@@ -38,6 +38,7 @@ grade_queue = Queue()
 current_lock_status = None
 current_grade = None
 window_scale = 1.0  # Default scale factor
+window_opacity = 0.8  # Default window opacity (0.0 = transparent, 1.0 = opaque)
 TITLE_BAR_HEIGHT = 32  # macOS title bar height in pixels
 
 # Config file path in script directory
@@ -46,7 +47,7 @@ CONFIG_FILE = os.path.join(SCRIPT_DIR, "kickr_gears_config.json")
 
 def load_config():
     """Load window position and scale from config file."""
-    global window_scale
+    global window_scale, window_opacity
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r') as f:
@@ -54,6 +55,7 @@ def load_config():
                 x = config.get('window_x', 100)
                 y = config.get('window_y', 100)
                 window_scale = config.get('scale', 1.0)
+                window_opacity = config.get('opacity', 0.8)
                 # Adjust Y position for title bar height (starts visible)
                 return x, y - TITLE_BAR_HEIGHT, window_scale
         except Exception as e:
@@ -94,7 +96,7 @@ def load_window_position():
 
 def save_window_position(x, y):
     """Save window position to config file, adjusting for title bar height."""
-    global window_scale
+    global window_scale, window_opacity
     try:
         config = {}
         if os.path.exists(CONFIG_FILE):
@@ -103,6 +105,7 @@ def save_window_position(x, y):
         config['window_x'] = x
         config['window_y'] = y
         config['scale'] = window_scale
+        config['opacity'] = window_opacity
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=2)
     except Exception as e:
@@ -173,7 +176,7 @@ def create_mini_window():
     
     root.resizable(False, False) # Make it non-resizable
     root.attributes('-topmost', True) # Keep it on top (optional)
-    root.attributes('-alpha', 0.8)  # Set window opacity (0.0 = transparent, 1.0 = opaque)
+    root.attributes('-alpha', window_opacity)  # Set window opacity (0.0 = transparent, 1.0 = opaque)
     # Start with title bar visible so window can receive focus
     
     # Set dull sky blue background (matching Zwift HUD)
@@ -266,9 +269,9 @@ def create_mini_window():
         # Load saved dialog position
         dialog_x, dialog_y = load_dialog_position()
         if dialog_x is not None and dialog_y is not None:
-            dialog.geometry(f"300x170+{dialog_x}+{dialog_y}")
+            dialog.geometry(f"300x240+{dialog_x}+{dialog_y}")
         else:
-            dialog.geometry("300x170")
+            dialog.geometry("300x240")
         
         dialog.resizable(False, False)  # Prevent resizing
         dialog.attributes('-topmost', True)
@@ -278,6 +281,14 @@ def create_mini_window():
                                orient=tk.HORIZONTAL, showvalue=True)
         scale_slider.set(window_scale)
         scale_slider.pack(pady=10, padx=20, fill=tk.X)
+
+        # Opacity slider
+        opacity_label = tk.Label(dialog, text="Opacity (%)", font=("Helvetica", 10, "bold"), bg=dialog.cget('bg'))
+        opacity_label.pack(pady=(5, 0), padx=20, anchor='w')
+        opacity_slider = tk.Scale(dialog, from_=10, to=100, resolution=1,
+                                 orient=tk.HORIZONTAL, showvalue=True)
+        opacity_slider.set(int(window_opacity * 100))
+        opacity_slider.pack(pady=(0, 10), padx=20, fill=tk.X)
         
         # Dragging checkbox
         dragging_var = tk.BooleanVar(value=dragging_enabled)
@@ -290,10 +301,11 @@ def create_mini_window():
         
         # Apply button
         def apply_scale():
-            global window_scale, current_dialog, dragging_enabled
+            global window_scale, current_dialog, dragging_enabled, window_opacity
             
-            # Get new scale and dragging preference
+            # Get new scale, opacity and dragging preference
             new_scale = scale_slider.get()
+            new_opacity = opacity_slider.get() / 100.0
             dragging_enabled = dragging_var.get()
             
             # Save dialog position
@@ -304,6 +316,14 @@ def create_mini_window():
             # Close dialog
             dialog.destroy()
             current_dialog = None
+            
+            # If opacity changed, apply it immediately
+            if abs(new_opacity - window_opacity) > 0.001:
+                window_opacity = new_opacity
+                try:
+                    root.attributes('-alpha', window_opacity)
+                except Exception:
+                    pass
             
             # If scale changed, update window in place
             if abs(new_scale - window_scale) > 0.001:

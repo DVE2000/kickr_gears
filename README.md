@@ -5,7 +5,7 @@ Python Script/Mac App to view KICKR bike gears and grade in a HUD window over Zw
 
 ## Installation
 
-1. After downloading or cloning, drag the app into the Applications folder
+1. Download or clone this repository into your home directory (`/Users/<your user name>/kickr_gears`)
 2. Go to [python.org](https://python.org) and download and install Python 3.14
 
 ### Setting Up Dependencies
@@ -20,6 +20,13 @@ source kickr/bin/activate
 python -m pip install -r ~/kickr_gears/requirements.txt
 deactivate
 ```
+
+4. Copy the `KICKR Gears.app` from the repository to your Applications folder:
+```zsh
+cp -r ~/kickr_gears/KICKR\ Gears.app /Applications/
+```
+
+A popup may appear asking if Terminal is allowed to access the Applications folder. Click **Allow** to proceed.
 
 ## Running the App
 
@@ -81,6 +88,8 @@ Once you've opened the dialog, you can only close the app by:
 
 ### If Dialog Was Never Opened
 You can also close by clicking the window and pressing `ESC`, `X`, `Q`, or `E`
+Because of the way the app is quit, you may get sometimes get a Python error dialog. Just click ignore.
+I'd rather have that than the irritating key beep on quit. :)
 
 ## Quick Start Checklist
 
