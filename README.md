@@ -85,11 +85,10 @@ Once you've opened the dialog, you can only close the app by:
 - Clicking "Quit App" in the dialog
 - Clicking the red square in the top-left of the window
 - Right-clicking the dock icon and selecting "Quit"
+- The red square will double in size if the dialog is ever opened. That also lets you know the keys no longer work for quitting.
 
 ### If Dialog Was Never Opened
 You can also close by clicking the window and pressing `ESC`, `X`, `Q`, or `E`
-Because of the way the app is quit, you may get sometimes get a Python error dialog. Just click ignore.
-I'd rather have that than the irritating key beep on quit. :)
 
 ## Quick Start Checklist
 

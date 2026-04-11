@@ -262,6 +262,12 @@ def create_mini_window():
         dialog = tk.Toplevel(root)
         current_dialog = dialog  # Track this dialog
         
+        # Double the quit box size on first dialog open only
+        if not quit_box_doubled[0]:
+            doubled_size = quit_box_size[0] * 2
+            quit_box.place(x=0, y=0, width=doubled_size, height=doubled_size)
+            quit_box_doubled[0] = True
+        
         debug_log(f"Creating dialog {id(dialog)} for root {id(root)}")
         
         dialog.title("Window Scale")
@@ -438,6 +444,8 @@ def create_mini_window():
     # Add 2x2 pixel black quit box in top left corner
     quit_box = tk.Label(root, bg='red', width=7, height=1)
     quit_box.place(x=0, y=0, width=7, height=7)
+    quit_box_size = [7]  # Track current size [normal_size]
+    quit_box_doubled = [False]  # Track if quit box has been doubled
     quit_box.bind("<Button-1>", lambda e: on_closing())
     
     # Bind mouse events for dragging
@@ -584,8 +592,8 @@ async def grade_notification_handler(sender, data):
     if grade_info:
         grade_queue.put(grade_info)
 
-async def main():
-    while True:
+async def main(shutdown_event):
+    while not shutdown_event.is_set():
         try:
             gears_queue.put(("Scanning for","KICKR..."))
             devices = await BleakScanner.discover()
@@ -597,13 +605,23 @@ async def main():
 
             if not kicker:
                 gears_queue.put(("KICKR not found.","Retrying..."))
-                await asyncio.sleep(1)
+                try:
+                    await asyncio.wait_for(asyncio.shield(asyncio.sleep(1)), timeout=1.1)
+                except asyncio.TimeoutError:
+                    pass
+                if shutdown_event.is_set():
+                    break
                 continue
 
             async with BleakClient(kicker.address) as client:
                 if not client.is_connected:
                     gears_queue.put(("Connection failed.","Retrying..."))
-                    await asyncio.sleep(1)
+                    try:
+                        await asyncio.wait_for(asyncio.shield(asyncio.sleep(1)), timeout=1.1)
+                    except asyncio.TimeoutError:
+                        pass
+                    if shutdown_event.is_set():
+                        break
                     continue
 
                 gears_queue.put((f"Connected to:", kicker.name))
@@ -623,36 +641,71 @@ async def main():
                     
                     # Keep connection alive while tkinter window runs
                     try:
-                        while client.is_connected:
+                        while client.is_connected and not shutdown_event.is_set():
                             await asyncio.sleep(0.1)
-                        # Connection was lost
-                        gears_queue.put(("Connection lost.","Reconnecting..."))
-                    except KeyboardInterrupt:
-                        await client.stop_notify(test_uuid)
-                        try:
-                            await client.stop_notify(grade_uuid)
-                        except:
-                            pass
-                        raise
+                        # Connection was lost or shutdown requested
+                        if not shutdown_event.is_set():
+                            gears_queue.put(("Connection lost.","Reconnecting..."))
+                        else:
+                            # Gracefully stop notifications on shutdown
+                            try:
+                                await client.stop_notify(test_uuid)
+                            except:
+                                pass
+                            try:
+                                await client.stop_notify(grade_uuid)
+                            except:
+                                pass
                     except Exception as e:
-                        gears_queue.put((f"Connection error {e}", "Reconnecting..."))
-        except KeyboardInterrupt:
+                        if not shutdown_event.is_set():
+                            gears_queue.put((f"Connection error {e}", "Reconnecting..."))
+        except asyncio.CancelledError:
+            debug_log("Async main cancelled, exiting cleanly")
             break
         except Exception as e:
-            gears_queue.put((f"Error: {e}", "Retrying..."))
-            await asyncio.sleep(1)
+            if not shutdown_event.is_set():
+                gears_queue.put((f"Error: {e}", "Retrying..."))
+                try:
+                    await asyncio.wait_for(asyncio.shield(asyncio.sleep(1)), timeout=1.1)
+                except asyncio.TimeoutError:
+                    pass
 
 if __name__ == "__main__":
+    # Create shutdown event to signal threads to exit gracefully
+    shutdown_event = threading.Event()
+    
     # Start async BLE connection in a separate thread
     def run_async_main():
-        asyncio.run(main())
+        try:
+            asyncio.run(main(shutdown_event))
+        except Exception as e:
+            debug_log(f"Error in BLE thread: {e}")
+        finally:
+            debug_log("BLE thread exiting")
     
-    ble_thread = threading.Thread(target=run_async_main, daemon=True)
+    ble_thread = threading.Thread(target=run_async_main, daemon=False)  # Not a daemon - we want to control exit
     ble_thread.start()
     
     # Start tkinter GUI (blocks until window closes)
     debug_log(f"Main loop: Calling create_mini_window()")
-    create_mini_window()
-    debug_log(f"Main loop: Window closed, exiting")
+    try:
+        create_mini_window()
+    except Exception as e:
+        debug_log(f"Exception in create_mini_window: {e}")
+    
+    debug_log(f"Main loop: Window closed, initiating shutdown")
+    
+    # Signal the BLE thread to shut down gracefully
+    shutdown_event.set()
+    
+    # Wait for BLE thread to exit (with timeout)
+    ble_thread.join(timeout=3.0)
+    
+    if ble_thread.is_alive():
+        debug_log("BLE thread did not exit in time, force exiting")
+    else:
+        debug_log("BLE thread exited cleanly")
+    
+    debug_log(f"Main loop: Exiting application")
 
 
