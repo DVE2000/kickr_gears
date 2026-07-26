@@ -1,4 +1,31 @@
 #!/bin/bash
-#source "$HOME"/kickr/bin/activate
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-"$HOME"/kickr/bin/python3 "$DIR/kickr_gears.py"
+PYTHON_BIN="$HOME/kickr/bin/python3"
+APP_SCRIPT="$DIR/kickr_gears.py"
+
+if [[ ! -x "$PYTHON_BIN" ]]; then
+	echo "Python runtime not found: $PYTHON_BIN" >&2
+	exit 1
+fi
+
+MACHINE_ARCH="$(uname -m)"
+PYTHON_ARCH="$($PYTHON_BIN -c 'import platform; print(platform.machine())' 2>/dev/null || echo unknown)"
+HAS_ARM64_HARDWARE="$(/usr/sbin/sysctl -in hw.optional.arm64 2>/dev/null || echo 0)"
+
+# Apple Silicon policy: run arm64 only (no Rosetta fallback).
+if [[ "$HAS_ARM64_HARDWARE" == "1" ]]; then
+	if [[ ! -x "/usr/bin/arch" ]]; then
+		echo "arm64 launch helper missing: /usr/bin/arch" >&2
+		exit 1
+	fi
+
+	ARM64_CHECK="$(/usr/bin/arch -arm64 "$PYTHON_BIN" -c 'import platform; print(platform.machine())' 2>/dev/null || echo unknown)"
+	if [[ "$ARM64_CHECK" != "arm64" ]]; then
+		echo "Python runtime is not arm64-capable: $PYTHON_BIN" >&2
+		exit 1
+	fi
+
+	exec /usr/bin/arch -arm64 "$PYTHON_BIN" "$APP_SCRIPT"
+fi
+
+exec "$PYTHON_BIN" "$APP_SCRIPT"
