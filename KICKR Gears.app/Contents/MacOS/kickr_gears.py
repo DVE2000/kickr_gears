@@ -40,6 +40,49 @@ current_grade = None
 window_scale = 1.0  # Default scale factor
 window_opacity = 0.8  # Default window opacity (0.0 = transparent, 1.0 = opaque)
 TITLE_BAR_HEIGHT = 32  # macOS title bar height in pixels
+DEFAULT_WINDOW_X = 100
+DEFAULT_WINDOW_Y = 100
+DEFAULT_WINDOW_SCALE = 1.0
+DEFAULT_WINDOW_OPACITY = 0.8
+
+WINDOW_BASE_WIDTH_DISCONNECTED = 320
+WINDOW_BASE_WIDTH_CONNECTED = 240
+WINDOW_BASE_HEIGHT = 130
+
+HUD_FONT_SCALE = 0.9
+HUD_FONT_GEARS = 35
+HUD_FONT_GRADE = 25
+HUD_FONT_DIALOG = 10
+
+DIALOG_WIDTH = 300
+DIALOG_HEIGHT = 240
+SLIDER_MIN_SCALE = 0.45
+SLIDER_MAX_SCALE = 1.5
+SLIDER_RESOLUTION = 0.05
+OPACITY_MIN = 10
+OPACITY_MAX = 100
+OPACITY_RESOLUTION = 1
+
+BUTTON_WIDTH = 10
+BUTTON_HEIGHT = 1
+QUIT_BOX_SIZE = 10
+QUIT_BOX_COLOR = 'red'
+
+DIALOG_PAD_Y = 10
+DIALOG_SLIDER_PAD_Y = 10
+DIALOG_SLIDER_PAD_X = 20
+LABEL_PAD_X = 10
+LABEL_PAD_Y = 0
+FOCUS_REFRESH_DELAY_MS = 100
+
+PROCESS_QUEUE_INTERVAL_MS = 100
+
+def hud_font(base_size, bold=True):
+    """Return a pixel-sized font tuple for stable rendering across Tk versions."""
+    pixel_size = max(1, int(round(base_size * window_scale * HUD_FONT_SCALE)))
+    if bold:
+        return ("Helvetica", -pixel_size, "bold")
+    return ("Helvetica", -pixel_size)
 
 # Config file path in script directory
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,15 +95,15 @@ def load_config():
         try:
             with open(CONFIG_FILE, 'r') as f:
                 config = json.load(f)
-                x = config.get('window_x', 100)
-                y = config.get('window_y', 100)
-                window_scale = config.get('scale', 1.0)
-                window_opacity = config.get('opacity', 0.8)
+                x = config.get('window_x', DEFAULT_WINDOW_X)
+                y = config.get('window_y', DEFAULT_WINDOW_Y)
+                window_scale = config.get('scale', DEFAULT_WINDOW_SCALE)
+                window_opacity = config.get('opacity', DEFAULT_WINDOW_OPACITY)
                 # Adjust Y position for title bar height (starts visible)
                 return x, y - TITLE_BAR_HEIGHT, window_scale
         except Exception as e:
             print(f"Error loading config: {e}")
-    return 100, 100, 1.0
+            return DEFAULT_WINDOW_X, DEFAULT_WINDOW_Y, DEFAULT_WINDOW_SCALE
 
 def load_dialog_position():
     """Load dialog position from config file."""
@@ -163,14 +206,9 @@ def create_mini_window():
     # Load saved window position and scale
     saved_x, saved_y, window_scale = load_config()
     
-    # Base dimensions
-    base_width_disconnected = 320
-    base_width_connected = 265
-    base_height = 150
-    
     # Apply scale
-    scaled_width = int(base_width_disconnected * window_scale)
-    scaled_height = int(base_height * window_scale)
+    scaled_width = int(WINDOW_BASE_WIDTH_DISCONNECTED * window_scale)
+    scaled_height = int(WINDOW_BASE_HEIGHT * window_scale)
     
     root.geometry(f"{scaled_width}x{scaled_height}+{saved_x}+{saved_y}")
     
@@ -275,23 +313,23 @@ def create_mini_window():
         # Load saved dialog position
         dialog_x, dialog_y = load_dialog_position()
         if dialog_x is not None and dialog_y is not None:
-            dialog.geometry(f"300x240+{dialog_x}+{dialog_y}")
+            dialog.geometry(f"{DIALOG_WIDTH}x{DIALOG_HEIGHT}+{dialog_x}+{dialog_y}")
         else:
-            dialog.geometry("300x240")
+                dialog.geometry(f"{DIALOG_WIDTH}x{DIALOG_HEIGHT}")
         
         dialog.resizable(False, False)  # Prevent resizing
         dialog.attributes('-topmost', True)
         
         # Scale slider
-        scale_slider = tk.Scale(dialog, from_=0.45, to=1.5, resolution=0.05, 
+        scale_slider = tk.Scale(dialog, from_=SLIDER_MIN_SCALE, to=SLIDER_MAX_SCALE, resolution=SLIDER_RESOLUTION, 
                                orient=tk.HORIZONTAL, showvalue=True)
         scale_slider.set(window_scale)
-        scale_slider.pack(pady=10, padx=20, fill=tk.X)
+        scale_slider.pack(pady=DIALOG_SLIDER_PAD_Y, padx=DIALOG_SLIDER_PAD_X, fill=tk.X)
 
         # Opacity slider
-        opacity_label = tk.Label(dialog, text="Opacity (%)", font=("Helvetica", 10, "bold"), bg=dialog.cget('bg'))
+        opacity_label = tk.Label(dialog, text="Opacity (%)", font=hud_font(HUD_FONT_DIALOG), bg=dialog.cget('bg'))
         opacity_label.pack(pady=(5, 0), padx=20, anchor='w')
-        opacity_slider = tk.Scale(dialog, from_=10, to=100, resolution=1,
+        opacity_slider = tk.Scale(dialog, from_=OPACITY_MIN, to=OPACITY_MAX, resolution=OPACITY_RESOLUTION,
                                  orient=tk.HORIZONTAL, showvalue=True)
         opacity_slider.set(int(window_opacity * 100))
         opacity_slider.pack(pady=(0, 10), padx=20, fill=tk.X)
@@ -300,7 +338,7 @@ def create_mini_window():
         dragging_var = tk.BooleanVar(value=dragging_enabled)
         dragging_checkbox = tk.Checkbutton(dialog, text="Enable Window Dragging",
                                           variable=dragging_var,
-                                          font=("Helvetica", 10))
+                                          font=hud_font(HUD_FONT_DIALOG, bold=False))
         dragging_checkbox.pack(pady=5)
         
         debug_log(f"Creating dialog {id(dialog)} for root {id(root)}")
@@ -340,21 +378,19 @@ def create_mini_window():
                 current_y = root.winfo_y()
                 
                 # Update all widget sizes WITHOUT toggling overrideredirect
-                gear_font_size = int(35 * window_scale)
-                gear_label_front.config(font=("Helvetica", gear_font_size, "bold"))
-                gear_label_back.config(font=("Helvetica", gear_font_size, "bold"))
-                
-                grade_font_size = int(25 * window_scale)
-                grade_label.config(font=("Helvetica", grade_font_size, "bold"))
+                gear_label_front.config(font=hud_font(35))
+                gear_label_back.config(font=hud_font(35))
+
+                grade_label.config(font=hud_font(25))
                 
                 # Update window size (use wider width at 60% scale or less for 2-digit gears)
                 if "Front Gear:" in gear_label_front.cget("text"):
-                    base_width = 280 if window_scale <= 0.60 else 265
+                    base_width = WINDOW_BASE_WIDTH_CONNECTED
                     scaled_width = int(base_width * window_scale)
                 else:
-                    base_width = 335 if window_scale <= 0.60 else 320
+                    base_width = WINDOW_BASE_WIDTH_DISCONNECTED
                     scaled_width = int(base_width * window_scale)
-                scaled_height = int(150 * window_scale)
+                scaled_height = int(WINDOW_BASE_HEIGHT * window_scale)
                 root.geometry(f"{scaled_width}x{scaled_height}+{current_x}+{current_y}")
                 
                 # Force update to apply changes
@@ -383,14 +419,14 @@ def create_mini_window():
         
         # Button frame for Apply and Cancel
         button_frame = tk.Frame(dialog)
-        button_frame.pack(pady=10, fill=tk.X)
+        button_frame.pack(pady=DIALOG_PAD_Y, fill=tk.X)
         
         apply_button = tk.Button(button_frame, text="Apply", command=apply_scale,
-                                font=("Helvetica", 10, "bold"), width=10, height=1)
+                    font=hud_font(HUD_FONT_DIALOG), width=BUTTON_WIDTH, height=BUTTON_HEIGHT)
         apply_button.grid(row=0, column=0, padx=5)
         
         cancel_button = tk.Button(button_frame, text="Cancel", command=cancel_scale,
-                                 font=("Helvetica", 10, "bold"), width=10, height=1)
+                     font=hud_font(HUD_FONT_DIALOG), width=BUTTON_WIDTH, height=BUTTON_HEIGHT)
         cancel_button.grid(row=0, column=1, padx=5)
         
         # Center the buttons in the frame
@@ -405,7 +441,7 @@ def create_mini_window():
             on_closing()
         
         quit_button = tk.Button(button_frame, text="Quit App", command=quit_app,
-                               font=("Helvetica", 10, "bold"), width=10, height=1)
+                       font=hud_font(HUD_FONT_DIALOG), width=BUTTON_WIDTH, height=BUTTON_HEIGHT)
         quit_button.grid(row=1, column=0, columnspan=2, pady=(5, 0))
 
         # Also handle window close button (X)
@@ -426,25 +462,23 @@ def create_mini_window():
         dialog.update_idletasks()
 
     # Add content with Zwift-style font (Helvetica/system-ui, white text on blue background)
-    gear_font_size = int(35 * window_scale)
-    gear_label_front = tk.Label(root, text="Connecting to", font=("Helvetica", gear_font_size, "bold"), 
+    gear_label_front = tk.Label(root, text="Connecting to", font=hud_font(HUD_FONT_GEARS), 
                      fg="white", bg='#486578', justify=tk.LEFT, anchor="w")
-    gear_label_front.pack(pady=0, fill=tk.X, padx=10)
+    gear_label_front.pack(pady=LABEL_PAD_Y, fill=tk.X, padx=LABEL_PAD_X)
     
-    gear_label_back = tk.Label(root, text="KICKR", font=("Helvetica", gear_font_size, "bold"), 
+    gear_label_back = tk.Label(root, text="KICKR", font=hud_font(HUD_FONT_GEARS), 
                      fg="white", bg='#486578', justify=tk.LEFT, anchor="w")
-    gear_label_back.pack(pady=0, fill=tk.X, padx=10)
+    gear_label_back.pack(pady=LABEL_PAD_Y, fill=tk.X, padx=LABEL_PAD_X)
     
     # Add grade label at the bottom, left-aligned
-    grade_font_size = int(25 * window_scale)
-    grade_label = tk.Label(root, text="Grade: --", font=("Helvetica", grade_font_size, "bold"), 
+    grade_label = tk.Label(root, text="Grade: --", font=hud_font(HUD_FONT_GRADE), 
                            fg="white", bg='#486578', justify=tk.LEFT, anchor="w")
-    grade_label.pack(pady=0, fill=tk.X, padx=10)
+    grade_label.pack(pady=LABEL_PAD_Y, fill=tk.X, padx=LABEL_PAD_X)
     
     # Add 2x2 pixel black quit box in top left corner
-    quit_box = tk.Label(root, bg='red', width=7, height=1)
-    quit_box.place(x=0, y=0, width=7, height=7)
-    quit_box_size = [7]  # Track current size [normal_size]
+    quit_box = tk.Label(root, bg=QUIT_BOX_COLOR, width=QUIT_BOX_SIZE, height=1)
+    quit_box.place(x=0, y=0, width=QUIT_BOX_SIZE, height=QUIT_BOX_SIZE)
+    quit_box_size = [QUIT_BOX_SIZE]  # Track current size [normal_size]
     quit_box_doubled = [False]  # Track if quit box has been doubled
     quit_box.bind("<Button-1>", lambda e: on_closing())
     
@@ -453,7 +487,7 @@ def create_mini_window():
         """Record initial position on mouse press and focus window."""
         on_press(event)
         # Re-focus after toggling title bar
-        root.after(100, root.focus_set)
+        root.after(FOCUS_REFRESH_DELAY_MS, root.focus_set)
     
     root.bind("<Button-1>", on_press_with_focus)
     root.bind("<B1-Motion>", on_drag)
@@ -492,15 +526,15 @@ def create_mini_window():
                 gear_data = gears_queue.get_nowait()
                 if gear_data[0].startswith("Front Gear:"):
                     # Set window width for gear display (scaled, wider at 60% or less)
-                    base_width = 280 if window_scale <= 0.60 else 265
+                    base_width = WINDOW_BASE_WIDTH_CONNECTED
                     scaled_width_connected = int(base_width * window_scale)
-                    scaled_height = int(150 * window_scale)
+                    scaled_height = int(WINDOW_BASE_HEIGHT * window_scale)
                     root.geometry(f"{scaled_width_connected}x{scaled_height}+{root.winfo_x()}+{root.winfo_y()}")
                 else:
                     # Increase window width when disconnected (scaled, wider at 60% or less)
-                    base_width = 335 if window_scale <= 0.60 else 320
+                    base_width = WINDOW_BASE_WIDTH_DISCONNECTED
                     scaled_width_disconnected = int(base_width * window_scale)
-                    scaled_height = int(150 * window_scale)
+                    scaled_height = int(WINDOW_BASE_HEIGHT * window_scale)
                     root.geometry(f"{scaled_width_disconnected}x{scaled_height}+{root.winfo_x()}+{root.winfo_y()}")
 
                 gear_label_front.config(text=gear_data[0])
@@ -536,13 +570,13 @@ def create_mini_window():
         
         # Schedule next check only if window still exists
         try:
-            after_id = root.after(100, process_queue)
+            after_id = root.after(PROCESS_QUEUE_INTERVAL_MS, process_queue)
             after_ids.append(after_id)
         except:
             pass  # Window destroyed, stop scheduling
 
     # Start processing queue
-    after_id = root.after(100, process_queue)
+    after_id = root.after(PROCESS_QUEUE_INTERVAL_MS, process_queue)
     after_ids.append(after_id)
     
     debug_log(f"Starting mainloop for root {id(root)}")
